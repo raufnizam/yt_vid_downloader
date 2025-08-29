@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .loader {
+            border-top-color: #34D399;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @-webkit-keyframes spinner {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .quality-option {
+            transition: all 0.2s ease;
+        }
+        .quality-option:hover {
+            transform: translateY(-2px);
+        }
+        .quality-option.selected {
+            background-color: #D1FAE5;
+            border-color: #10B981;
+        }
+        .download-type-option.selected {
+            background-color: #D1FAE5;
+            border-color: #10B981;
+        }
+        .download-card {
+            transition: all 0.3s ease;
+        }
+        .download-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .progress-bar {
+            height: 6px;
+            background-color: #E5E7EB;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #10B981;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .btn-loading {
+            position: relative;
+            color: transparent;
+        }
+        .btn-loading::after {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            animation: spinner 0.8s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-green-50 to-blue-50 min-h-screen">
+    <div class="container mx-auto px-4 py-12">
+        <div class="max-w-lg mx-auto bg-white rounded-xl shadow-lg overflow-hidden download-card">
+            <div class="p-8">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-green-600 mb-2">YouTube Video Downloader</h1>
+                    <p class="text-gray-600">Download videos or audio in your preferred quality</p>
+                </div>
+                
+                <div id="notification-area">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="mb-6 p-4 rounded-lg {% if category == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
+                                    <div class="flex items-center">
+                                        <i class="fas {% if category == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %} mr-2"></i>
+                                        {{ message }}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                
+                <form id="download-form" action="/" method="POST" class="space-y-6">
+                    <div>
+                        <label for="url" class="block text-sm font-medium text-gray-700 mb-1">YouTube URL</label>
+                        <div class="relative">
+                            <input 
+                                type="url" 
+                                id="url" 
+                                name="url" 
+                                required
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition" 
+                                placeholder="https://www.youtube.com/watch?v=..."
+                            >
+                            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                <i class="fas fa-link text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Download Type</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition download-type-option selected">
+                                <input type="radio" name="download_type" value="video" class="sr-only peer" checked>
+                                <div class="text-center">
+                                    <i class="fas fa-video text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">Video</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition download-type-option">
+                                <input type="radio" name="download_type" value="audio" class="sr-only peer">
+                                <div class="text-center">
+                                    <i class="fas fa-music text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">Audio Only</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="video-quality-options">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Video Quality</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition quality-option">
+                                <input type="radio" name="quality" value="480p" class="sr-only peer">
+                                <div class="text-center">
+                                    <i class="fas fa-video text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">480p</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition quality-option selected">
+                                <input type="radio" name="quality" value="720p" class="sr-only peer" checked>
+                                <div class="text-center">
+                                    <i class="fas fa-video text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">720p</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition quality-option">
+                                <input type="radio" name="quality" value="1080p" class="sr-only peer">
+                                <div class="text-center">
+                                    <i class="fas fa-video text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">1080p</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="audio-quality-options" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Audio Quality</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition quality-option">
+                                <input type="radio" name="audio_quality" value="128kbps" class="sr-only peer">
+                                <div class="text-center">
+                                    <i class="fas fa-music text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">128kbps</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition quality-option selected">
+                                <input type="radio" name="audio_quality" value="320kbps" class="sr-only peer" checked>
+                                <div class="text-center">
+                                    <i class="fas fa-music text-gray-500 peer-checked:text-green-500 mb-1"></i>
+                                    <div class="text-sm font-medium peer-checked:text-green-600">320kbps</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input 
+                            type="checkbox" 
+                            id="playlist" 
+                            name="playlist" 
+                            class="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        >
+                        <label for="playlist" class="ml-3 block text-sm font-medium text-gray-700">
+                            Download as Playlist
+                        </label>
+                    </div>
+                    
+                    <div id="selection-summary" class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-blue-700">Your selection: <span id="summary-text">Video (720p)</span></p>
+                    </div>
+                    
+                    <div id="download-progress" class="hidden">
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Download Progress</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        type="submit" 
+                        id="download-btn"
+                        class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-4 rounded-lg transition flex items-center justify-center"
+                    >
+                        <i class="fas fa-download mr-2"></i>
+                        <span id="btn-text">Download</span>
+                    </button>
+                </form>
+                
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">How to use:</h3>
+                    <ol class="list-decimal pl-5 space-y-1 text-sm text-gray-600">
+                        <li>Copy the YouTube video or playlist URL</li>
+                        <li>Select download type (video or audio only)</li>
+                        <li>Choose your preferred quality</li>
+                        <li>Check "Download as Playlist" if it's a playlist</li>
+                        <li>Click the download button</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-8 text-gray-500 text-sm">
+            <p>© 2023 YouTube Video Downloader. All rights reserved.</p>
+            <p class="mt-1">This tool is for educational purposes only.</p>
+        </div>
+    </div>
+    
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="flex justify-center mb-4">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">Processing Your Download</h3>
+                <p class="text-gray-600 mb-4">Please wait while we prepare your file...</p>
+                <div class="bg-gray-100 rounded-lg p-4 text-left">
+                    <p class="text-sm text-gray-700 mb-1">URL: <span id="loading-url" class="font-mono text-xs truncate block"></span></p>
+                    <p class="text-sm text-gray-700">Type: <span id="loading-type"></span></p>
+                    <p class="text-sm text-gray-700">Quality: <span id="loading-quality"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle download type selection
+            const downloadTypeRadios = document.querySelectorAll('input[name="download_type"]');
+            const videoQualityOptions = document.getElementById('video-quality-options');
+            const audioQualityOptions = document.getElementById('audio-quality-options');
+            const selectionSummary = document.getElementById('selection-summary');
+            const summaryText = document.getElementById('summary-text');
+            
+            downloadTypeRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'video') {
+                        videoQualityOptions.classList.remove('hidden');
+                        audioQualityOptions.classList.add('hidden');
+                    } else {
+                        videoQualityOptions.classList.add('hidden');
+                        audioQualityOptions.classList.remove('hidden');
+                    }
+                    updateSelectionSummary();
+                });
+            });
+            
+            // Handle quality selection
+            const qualityRadios = document.querySelectorAll('input[name="quality"], input[name="audio_quality"]');
+            qualityRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    // Update visual selection
+                    document.querySelectorAll('.quality-option').forEach(option => {
+                        option.classList.remove('selected');
+                    });
+                    this.closest('.quality-option').classList.add('selected');
+                    
+                    updateSelectionSummary();
+                });
+            });
+            
+            // Update selection summary
+            function updateSelectionSummary() {
+                const downloadType = document.querySelector('input[name="download_type"]:checked').value;
+                let quality;
+                
+                if (downloadType === 'video') {
+                    quality = document.querySelector('input[name="quality"]:checked').value;
+                    summaryText.textContent = `Video (${quality})`;
+                } else {
+                    quality = document.querySelector('input[name="audio_quality"]:checked').value;
+                    summaryText.textContent = `Audio (${quality})`;
+                }
+            }
+            
+            // Initialize selection summary
+            updateSelectionSummary();
+            
+            // Handle form submission
+            const downloadForm = document.getElementById('download-form');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingUrl = document.getElementById('loading-url');
+            const loadingType = document.getElementById('loading-type');
+            const loadingQuality = document.getElementById('loading-quality');
+            const downloadBtn = document.getElementById('download-btn');
+            const btnText = document.getElementById('btn-text');
+            const downloadProgress = document.getElementById('download-progress');
+            const progressFill = document.getElementById('progress-fill');
+            const progressPercent = document.getElementById('progress-percent');
+            
+            downloadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Get form values
+                const url = document.getElementById('url').value;
+                const downloadType = document.querySelector('input[name="download_type"]:checked').value;
+                let quality;
+                
+                if (downloadType === 'video') {
+                    quality = document.querySelector('input[name="quality"]:checked').value;
+                } else {
+                    quality = document.querySelector('input[name="audio_quality"]:checked').value;
+                }
+                
+                // Update loading screen
+                loadingUrl.textContent = url;
+                loadingType.textContent = downloadType === 'video' ? 'Video' : 'Audio';
+                loadingQuality.textContent = quality;
+                
+                // Show loading overlay
+                loadingOverlay.classList.remove('hidden');
+                
+                // Show progress bar
+                downloadProgress.classList.remove('hidden');
+                
+                // Disable button and show loading state
+                downloadBtn.disabled = true;
+                downloadBtn.classList.add('btn-loading');
+                
+                // Simulate progress (in a real app, this would come from the server)
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 100) progress = 100;
+                    
+                    progressFill.style.width = progress + '%';
+                    progressPercent.textContent = Math.round(progress) + '%';
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                    }
+                }, 500);
+                
+                // Submit the form
+                this.submit();
+                
+                // Hide the overlay after 5 seconds (assuming download has started by then)
+                setTimeout(function() {
+                    loadingOverlay.classList.add('hidden');
+                    downloadBtn.disabled = false;
+                    downloadBtn.classList.remove('btn-loading');
+                    btnText.textContent = 'Download';
+                    
+                    // Reset progress bar after a delay
+                    setTimeout(() => {
+                        downloadProgress.classList.add('hidden');
+                        progressFill.style.width = '0%';
+                        progressPercent.textContent = '0%';
+                    }, 2000);
+                }, 5000);
+            });
+            
+            // Add visual feedback to quality options
+            document.querySelectorAll('.quality-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio) {
+                        radio.checked = true;
+                        
+                        // Update visual selection
+                        document.querySelectorAll('.quality-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                        
+                        updateSelectionSummary();
+                    }
+                });
+            });
+            
+            // Add visual feedback to download type options
+            document.querySelectorAll('.download-type-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio) {
+                        radio.checked = true;
+                        
+                        // Update visual selection
+                        document.querySelectorAll('.download-type-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                        
+                        // Show/hide appropriate quality options
+                        if (radio.value === 'video') {
+                            videoQualityOptions.classList.remove('hidden');
+                            audioQualityOptions.classList.add('hidden');
+                        } else {
+                            videoQualityOptions.classList.add('hidden');
+                            audioQualityOptions.classList.remove('hidden');
+                        }
+                        
+                        updateSelectionSummary();
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
